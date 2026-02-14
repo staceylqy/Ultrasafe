@@ -1,0 +1,4 @@
+include README.md
+recursive-include ultrasafe/static *
+recursive-include ultrasafe/data *
+
