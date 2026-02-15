@@ -30,6 +30,18 @@ Backend API (optional, for video/masks):
 python -m ultrasafe
 ```
 
+## Run together (single URL)
+1) Build the frontend:
+```
+cd frontend
+npm run build
+```
+2) Run the backend:
+```
+python -m ultrasafe
+```
+Then open `http://localhost:8000`.
+
 ## Configuration
 - `CAMERA_INDEX` (default `0`)
 - `MODEL_PATH` (path to a trained `.pt` model)
