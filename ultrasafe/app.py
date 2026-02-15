@@ -5,10 +5,17 @@ import cv2
 import numpy as np
 import torch
 from fastapi import FastAPI, WebSocket
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from .capture import FrameGrabber
 from .model import UNet
+
+APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIST = os.getenv(
+    "FRONTEND_DIST",
+    os.path.abspath(os.path.join(APP_ROOT, "..", "frontend", "dist")),
+)
 
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
 MODEL_PATH = os.getenv("MODEL_PATH", "")
@@ -90,4 +97,23 @@ async def mask_socket(ws: WebSocket):
             await ws.receive_text()
     except Exception:
         await ws.close()
+
+
+def _frontend_available() -> bool:
+    return os.path.exists(os.path.join(FRONTEND_DIST, "index.html"))
+
+
+if _frontend_available():
+    assets_dir = os.path.join(FRONTEND_DIST, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/")
+    def frontend_index():
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+    @app.get("/{path:path}")
+    def frontend_spa(path: str):
+        # Let explicit API routes handle their own paths.
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
 

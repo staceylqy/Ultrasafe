@@ -183,25 +183,25 @@ export function Welcome() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4"
+            className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 overflow-visible"
           >
-            <div className="text-center mb-6">
+            <div className="text-center mb-6 overflow-visible">
               <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Brain className="w-8 h-8 text-white animate-pulse" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              <h3 className="text-xl font-semibold text-gray-900 mb-2 leading-relaxed">
                 AI Processing Progress
               </h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 leading-relaxed">
                 Analyzing ultrasound images and detecting nerve structures...
               </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 overflow-visible">
               <Progress value={processingProgress} className="h-3" />
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Processing</span>
-                <span className="font-semibold text-gray-900">
+                <span className="text-gray-600 leading-relaxed">Processing</span>
+                <span className="font-semibold text-gray-900 leading-relaxed">
                   {Math.round(processingProgress)}%
                 </span>
               </div>
