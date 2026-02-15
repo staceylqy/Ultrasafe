@@ -1,1 +1,4 @@
 raw_data/
+node_modules/
+ultrasafe/data/
+frontend/node_modules/

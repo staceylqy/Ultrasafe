@@ -5,13 +5,10 @@ import cv2
 import numpy as np
 import torch
 from fastapi import FastAPI, WebSocket
-from fastapi.responses import HTMLResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 
 from .capture import FrameGrabber
 from .model import UNet
-
-APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
 MODEL_PATH = os.getenv("MODEL_PATH", "")
@@ -19,7 +16,6 @@ INFER_SIZE = int(os.getenv("INFER_SIZE", "256"))
 USE_CUDA = os.getenv("USE_CUDA", "1") == "1"
 
 app = FastAPI()
-app.mount("/static", StaticFiles(directory=os.path.join(APP_ROOT, "static")), name="static")
 
 grabber = FrameGrabber(camera_index=CAMERA_INDEX)
 grabber.start()
@@ -36,12 +32,6 @@ def load_model() -> torch.nn.Module:
 
 
 model = load_model()
-
-
-@app.get("/")
-def index() -> HTMLResponse:
-    with open(os.path.join(APP_ROOT, "static", "index.html"), "r", encoding="utf-8") as f:
-        return HTMLResponse(f.read())
 
 
 def preprocess(frame: np.ndarray) -> torch.Tensor:
