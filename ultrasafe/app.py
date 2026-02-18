@@ -16,6 +16,13 @@ FRONTEND_DIST = os.getenv(
     "FRONTEND_DIST",
     os.path.abspath(os.path.join(APP_ROOT, "..", "frontend", "dist")),
 )
+OBS_CAMERA_INDEX = int(os.getenv("OBS_CAMERA_INDEX", "1"))
+USE_FULL_FRAME = os.getenv("USE_FULL_FRAME", "1") == "1"
+ROI_X = int(os.getenv("ROI_X", "3"))
+ROI_Y = int(os.getenv("ROI_Y", "4"))
+ROI_W = int(os.getenv("ROI_W", "507"))
+ROI_H = int(os.getenv("ROI_H", "504"))
+OVERLAY_ALPHA = float(os.getenv("OVERLAY_ALPHA", "0.35"))
 
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
 MODEL_PATH = os.getenv("MODEL_PATH", "")
@@ -75,6 +82,84 @@ def video_feed() -> StreamingResponse:
     return StreamingResponse(mjpeg_stream(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
+def _open_obs_capture() -> cv2.VideoCapture:
+    if os.name == "nt":
+        return cv2.VideoCapture(OBS_CAMERA_INDEX, cv2.CAP_DSHOW)
+    return cv2.VideoCapture(OBS_CAMERA_INDEX)
+
+
+def overlay_mjpeg_stream():
+    cap = _open_obs_capture()
+    if not cap.isOpened():
+        raise RuntimeError("Cannot open OBS Virtual Camera.")
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    fps_smooth = 0.0
+    t_prev = time.time()
+
+    try:
+        while True:
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                time.sleep(0.01)
+                continue
+
+            if USE_FULL_FRAME:
+                roi = frame
+                x0, y0 = 0, 0
+            else:
+                roi = frame[ROI_Y:ROI_Y + ROI_H, ROI_X:ROI_X + ROI_W]
+                x0, y0 = ROI_X, ROI_Y
+
+            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            blur = cv2.GaussianBlur(gray, (5, 5), 0)
+            _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+            overlay = roi.copy()
+            overlay[mask > 0] = (0, 255, 0)
+            blended = cv2.addWeighted(overlay, OVERLAY_ALPHA, roi, 1 - OVERLAY_ALPHA, 0)
+
+            if USE_FULL_FRAME:
+                out = blended
+            else:
+                out = frame.copy()
+                out[y0:y0 + roi.shape[0], x0:x0 + roi.shape[1]] = blended
+
+            t_now = time.time()
+            dt = t_now - t_prev
+            t_prev = t_now
+            if dt > 0:
+                inst = 1.0 / dt
+                fps_smooth = inst if fps_smooth == 0 else (0.9 * fps_smooth + 0.1 * inst)
+
+            cv2.putText(
+                out,
+                f"RUBBISH SEG | FPS {fps_smooth:.1f}",
+                (10, 25),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (255, 255, 255),
+                2,
+            )
+
+            ok, jpg = cv2.imencode(".jpg", out, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if not ok:
+                continue
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" + jpg.tobytes() + b"\r\n"
+            )
+    finally:
+        cap.release()
+
+
+@app.get("/video/overlay")
+def video_overlay_feed() -> StreamingResponse:
+    return StreamingResponse(overlay_mjpeg_stream(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
 @app.websocket("/ws/mask")
 async def mask_socket(ws: WebSocket):
     await ws.accept()
@@ -116,4 +201,6 @@ if _frontend_available():
     def frontend_spa(path: str):
         # Let explicit API routes handle their own paths.
         return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+
 
