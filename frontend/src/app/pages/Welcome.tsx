@@ -2,56 +2,12 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Brain, Scan, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
-import { importFromUltrasoundDevice } from "../data/ultrasoundData";
-import { simulateNerveDetection } from "../utils/nerveDetection";
-import { NerveDetection } from "../components/UltrasoundImage";
-import { Progress } from "../components/ui/progress";
-
-interface ProcessedImage {
-  id: string;
-  url: string;
-  name: string;
-  detections: NerveDetection[];
-  isProcessed: boolean;
-}
 
 export function Welcome() {
   const navigate = useNavigate();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState(0);
 
   const handleStart = async () => {
-    setIsProcessing(true);
-    setProcessingProgress(0);
-
-    // Import ultrasound images
-    const ultrasoundData = await importFromUltrasoundDevice();
-
-    // Create initial image objects
-    const initialImages: ProcessedImage[] = ultrasoundData.map((data) => ({
-      id: data.id,
-      url: data.url,
-      name: data.name,
-      detections: [],
-      isProcessed: false,
-    }));
-
-    // Process images one by one with AI detection
-    const processedImages: ProcessedImage[] = [];
-    for (let i = 0; i < ultrasoundData.length; i++) {
-      const detections = await simulateNerveDetection(null as any);
-      processedImages.push({
-        ...initialImages[i],
-        detections,
-        isProcessed: true,
-      });
-      
-      setProcessingProgress(((i + 1) / ultrasoundData.length) * 100);
-    }
-
-    // Navigate to detection page with processed images
-    navigate("/detection", { state: { processedImages } });
+    navigate("/detection");
   };
 
   return (
@@ -177,38 +133,6 @@ export function Welcome() {
         </motion.div>
       </div>
 
-      {/* Processing Modal */}
-      {isProcessing && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 overflow-visible"
-          >
-            <div className="text-center mb-6 overflow-visible">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Brain className="w-8 h-8 text-white animate-pulse" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2 leading-relaxed">
-                AI Processing Progress
-              </h3>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                Analyzing ultrasound images and detecting nerve structures...
-              </p>
-            </div>
-
-            <div className="space-y-3 overflow-visible">
-              <Progress value={processingProgress} className="h-3" />
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600 leading-relaxed">Processing</span>
-                <span className="font-semibold text-gray-900 leading-relaxed">
-                  {Math.round(processingProgress)}%
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }
