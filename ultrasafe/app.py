@@ -94,7 +94,20 @@ def video_feed() -> StreamingResponse:
 
 def _open_obs_capture() -> cv2.VideoCapture:
     if os.name == "nt":
-        return cv2.VideoCapture(OBS_CAMERA_INDEX, cv2.CAP_DSHOW)
+        for backend in (cv2.CAP_DSHOW, cv2.CAP_MSMF):
+            cap = cv2.VideoCapture(OBS_CAMERA_INDEX, backend)
+            if cap.isOpened():
+                return cap
+        cap = cv2.VideoCapture(OBS_CAMERA_INDEX)
+        if cap.isOpened():
+            return cap
+        # Fallback to default camera index if OBS index fails.
+        cap = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW)
+        return cap
+    if os.name == "posix" and hasattr(cv2, "CAP_AVFOUNDATION"):
+        cap = cv2.VideoCapture(OBS_CAMERA_INDEX, cv2.CAP_AVFOUNDATION)
+        if cap.isOpened():
+            return cap
     return cv2.VideoCapture(OBS_CAMERA_INDEX)
 
 
