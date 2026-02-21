@@ -3,6 +3,7 @@ import time
 
 import cv2
 import numpy as np
+import tensorflow as tf
 import torch
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import FileResponse, StreamingResponse
@@ -23,6 +24,12 @@ ROI_Y = int(os.getenv("ROI_Y", "4"))
 ROI_W = int(os.getenv("ROI_W", "507"))
 ROI_H = int(os.getenv("ROI_H", "504"))
 OVERLAY_ALPHA = float(os.getenv("OVERLAY_ALPHA", "0.35"))
+KERAS_MODEL_PATH = os.getenv(
+    "KERAS_MODEL_PATH",
+    os.path.abspath(os.path.join(APP_ROOT, "..", "models", "nerve_segmentation.keras")),
+)
+KERAS_INPUT_SIZE = int(os.getenv("KERAS_INPUT_SIZE", "512"))
+KERAS_THRESHOLD = float(os.getenv("KERAS_THRESHOLD", "0.1"))
 
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
 MODEL_PATH = os.getenv("MODEL_PATH", "")
@@ -46,6 +53,9 @@ def load_model() -> torch.nn.Module:
 
 
 model = load_model()
+keras_model = None
+if os.path.exists(KERAS_MODEL_PATH):
+    keras_model = tf.keras.models.load_model(KERAS_MODEL_PATH)
 
 
 def preprocess(frame: np.ndarray) -> torch.Tensor:
@@ -93,7 +103,6 @@ def overlay_mjpeg_stream():
     if not cap.isOpened():
         raise RuntimeError("Cannot open OBS Virtual Camera.")
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
     fps_smooth = 0.0
     t_prev = time.time()
 
@@ -112,10 +121,25 @@ def overlay_mjpeg_stream():
                 x0, y0 = ROI_X, ROI_Y
 
             gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-            blur = cv2.GaussianBlur(gray, (5, 5), 0)
-            _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+            resized = cv2.resize(
+                gray,
+                (KERAS_INPUT_SIZE, KERAS_INPUT_SIZE),
+                interpolation=cv2.INTER_AREA,
+            )
+            normalized = resized.astype("float32") / 255.0
+            input_data = normalized[None, :, :, None]
+
+            if keras_model is None:
+                mask = np.zeros_like(gray, dtype=np.uint8)
+            else:
+                prediction = keras_model.predict(input_data, verbose=0)
+                prob_map = prediction[0, :, :, 0]
+                binary_mask = (prob_map > KERAS_THRESHOLD).astype(np.uint8) * 255
+                mask = cv2.resize(
+                    binary_mask,
+                    (gray.shape[1], gray.shape[0]),
+                    interpolation=cv2.INTER_NEAREST,
+                )
 
             overlay = roi.copy()
             overlay[mask > 0] = (0, 255, 0)
@@ -136,7 +160,7 @@ def overlay_mjpeg_stream():
 
             cv2.putText(
                 out,
-                f"RUBBISH SEG | FPS {fps_smooth:.1f}",
+                f"NERVE SEG | FPS {fps_smooth:.1f}",
                 (10, 25),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
