@@ -28,8 +28,8 @@ KERAS_MODEL_PATH = os.getenv(
     "KERAS_MODEL_PATH",
     os.path.abspath(os.path.join(APP_ROOT, "..", "models", "nerve_segmentation.keras")),
 )
-KERAS_INPUT_SIZE = int(os.getenv("KERAS_INPUT_SIZE", "512"))
 KERAS_THRESHOLD = float(os.getenv("KERAS_THRESHOLD", "0.1"))
+RUN_EVERY_N_FRAMES = int(os.getenv("RUN_EVERY_N_FRAMES", "1"))
 
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
 MODEL_PATH = os.getenv("MODEL_PATH", "")
@@ -54,8 +54,14 @@ def load_model() -> torch.nn.Module:
 
 model = load_model()
 keras_model = None
+keras_input_h = None
+keras_input_w = None
 if os.path.exists(KERAS_MODEL_PATH):
-    keras_model = tf.keras.models.load_model(KERAS_MODEL_PATH)
+    keras_model = tf.keras.models.load_model(KERAS_MODEL_PATH, compile=False)
+    keras_input_h = int(keras_model.input_shape[1])
+    keras_input_w = int(keras_model.input_shape[2])
+    dummy = np.zeros((1, keras_input_h, keras_input_w, 1), dtype=np.float32)
+    keras_model.predict(dummy, verbose=0)
 
 
 def preprocess(frame: np.ndarray) -> torch.Tensor:
@@ -118,6 +124,8 @@ def overlay_mjpeg_stream():
 
     fps_smooth = 0.0
     t_prev = time.time()
+    frame_count = 0
+    last_mask_512 = np.zeros((512, 512), dtype=np.uint8)
 
     try:
         while True:
@@ -133,30 +141,30 @@ def overlay_mjpeg_stream():
                 roi = frame[ROI_Y:ROI_Y + ROI_H, ROI_X:ROI_X + ROI_W]
                 x0, y0 = ROI_X, ROI_Y
 
-            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-            resized = cv2.resize(
-                gray,
-                (KERAS_INPUT_SIZE, KERAS_INPUT_SIZE),
-                interpolation=cv2.INTER_AREA,
-            )
-            normalized = resized.astype("float32") / 255.0
-            input_data = normalized[None, :, :, None]
-
-            if keras_model is None:
-                mask = np.zeros_like(gray, dtype=np.uint8)
+            if roi.shape[0] != 512 or roi.shape[1] != 512:
+                roi_512 = cv2.resize(roi, (512, 512), interpolation=cv2.INTER_AREA)
             else:
-                prediction = keras_model.predict(input_data, verbose=0)
-                prob_map = prediction[0, :, :, 0]
-                binary_mask = (prob_map > KERAS_THRESHOLD).astype(np.uint8) * 255
-                mask = cv2.resize(
-                    binary_mask,
-                    (gray.shape[1], gray.shape[0]),
-                    interpolation=cv2.INTER_NEAREST,
-                )
+                roi_512 = roi
 
-            overlay = roi.copy()
-            overlay[mask > 0] = (0, 255, 0)
-            blended = cv2.addWeighted(overlay, OVERLAY_ALPHA, roi, 1 - OVERLAY_ALPHA, 0)
+            infer_ms = None
+            if keras_model is not None and frame_count % RUN_EVERY_N_FRAMES == 0:
+                t0 = time.time()
+                gray = cv2.cvtColor(roi_512, cv2.COLOR_BGR2GRAY)
+                gray_in = cv2.resize(gray, (keras_input_w, keras_input_h), interpolation=cv2.INTER_AREA)
+                inp = (gray_in.astype(np.float32) / 255.0)[None, ..., None]
+
+                pred = keras_model.predict(inp, verbose=0)
+                prob_map = pred[0, :, :, 0]
+                mask_in = (prob_map > KERAS_THRESHOLD).astype(np.uint8)
+                last_mask_512 = cv2.resize(mask_in, (512, 512), interpolation=cv2.INTER_NEAREST) * 255
+                infer_ms = (time.time() - t0) * 1000.0
+
+            overlay = roi_512.copy()
+            overlay[last_mask_512 > 0] = (0, 255, 0)
+            blended = cv2.addWeighted(overlay, OVERLAY_ALPHA, roi_512, 1 - OVERLAY_ALPHA, 0)
+
+            if roi_512.shape[:2] != roi.shape[:2]:
+                blended = cv2.resize(blended, (roi.shape[1], roi.shape[0]), interpolation=cv2.INTER_AREA)
 
             if USE_FULL_FRAME:
                 out = blended
@@ -171,12 +179,15 @@ def overlay_mjpeg_stream():
                 inst = 1.0 / dt
                 fps_smooth = inst if fps_smooth == 0 else (0.9 * fps_smooth + 0.1 * inst)
 
+            txt = f"U-Net | FPS {fps_smooth:.1f} | thr {KERAS_THRESHOLD}"
+            if infer_ms is not None:
+                txt += f" | infer {infer_ms:.1f} ms"
             cv2.putText(
                 out,
-                f"NERVE SEG | FPS {fps_smooth:.1f}",
+                txt,
                 (10, 25),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
+                0.6,
                 (255, 255, 255),
                 2,
             )
@@ -188,6 +199,7 @@ def overlay_mjpeg_stream():
                 b"--frame\r\n"
                 b"Content-Type: image/jpeg\r\n\r\n" + jpg.tobytes() + b"\r\n"
             )
+            frame_count += 1
     finally:
         cap.release()
 
