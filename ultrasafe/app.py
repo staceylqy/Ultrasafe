@@ -33,7 +33,8 @@ if not os.path.exists(KERAS_MODEL_PATH) and os.path.exists(DEFAULT_KERAS_MODEL_P
     KERAS_MODEL_PATH = DEFAULT_KERAS_MODEL_PATH
 
 KERAS_THRESHOLD = float(os.getenv("KERAS_THRESHOLD", "0.8"))
-RUN_EVERY_N_FRAMES = int(os.getenv("RUN_EVERY_N_FRAMES", "1"))
+RUN_EVERY_N_FRAMES = int(os.getenv("RUN_EVERY_N_FRAMES", "2"))
+KERAS_INPUT_SIZE = int(os.getenv("KERAS_INPUT_SIZE", "256"))
 
 POST_MORPH = os.getenv("POST_MORPH", "1") == "1"
 MORPH_KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
@@ -85,8 +86,8 @@ keras_input_w = None
 keras_area = None
 if os.path.exists(KERAS_MODEL_PATH):
     keras_model = tf.keras.models.load_model(KERAS_MODEL_PATH, compile=False)
-    keras_input_h = int(keras_model.input_shape[1])
-    keras_input_w = int(keras_model.input_shape[2])
+    keras_input_h = int(keras_model.input_shape[1] or KERAS_INPUT_SIZE)
+    keras_input_w = int(keras_model.input_shape[2] or KERAS_INPUT_SIZE)
     keras_area = float(keras_input_h * keras_input_w)
     dummy = np.zeros((1, keras_input_h, keras_input_w, 1), dtype=np.float32)
     keras_model.predict(dummy, verbose=0)
@@ -186,6 +187,19 @@ def draw_hud(out_img: np.ndarray, lines, bottom_left=True):
             y += (th + baseline + 6)
 
 
+def select_roi(frame: np.ndarray):
+    if USE_FULL_FRAME:
+        return frame, 0, 0
+    h, w = frame.shape[:2]
+    x1 = max(0, ROI_X)
+    y1 = max(0, ROI_Y)
+    x2 = min(w, ROI_X + ROI_W)
+    y2 = min(h, ROI_Y + ROI_H)
+    if x2 <= x1 or y2 <= y1:
+        return frame, 0, 0
+    return frame[y1:y2, x1:x2], x1, y1
+
+
 def mjpeg_stream():
     while True:
         frame = grabber.get_frame()
@@ -244,12 +258,7 @@ def overlay_mjpeg_stream():
                 time.sleep(0.01)
                 continue
 
-            if USE_FULL_FRAME:
-                roi = frame
-                x0, y0 = 0, 0
-            else:
-                roi = frame[ROI_Y:ROI_Y + ROI_H, ROI_X:ROI_X + ROI_W]
-                x0, y0 = ROI_X, ROI_Y
+            roi, x0, y0 = select_roi(frame)
 
             gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
             last_mask_roi = ensure_mask_shape(last_mask_roi, (roi.shape[0], roi.shape[1]))
