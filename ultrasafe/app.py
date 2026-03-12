@@ -19,7 +19,7 @@ FRONTEND_DIST = os.getenv(
     os.path.abspath(os.path.join(APP_ROOT, "..", "frontend", "dist")),
 )
 OBS_CAMERA_INDEX = int(os.getenv("OBS_CAMERA_INDEX", "1"))
-USE_FULL_FRAME = os.getenv("USE_FULL_FRAME", "1") == "1"
+USE_FULL_FRAME = os.getenv("USE_FULL_FRAME", "0") == "0"
 ROI_X = int(os.getenv("ROI_X", "3"))
 ROI_Y = int(os.getenv("ROI_Y", "4"))
 ROI_W = int(os.getenv("ROI_W", "507"))
@@ -33,7 +33,7 @@ if not os.path.exists(KERAS_MODEL_PATH) and os.path.exists(DEFAULT_KERAS_MODEL_P
     KERAS_MODEL_PATH = DEFAULT_KERAS_MODEL_PATH
 
 KERAS_THRESHOLD = float(os.getenv("KERAS_THRESHOLD", "0.9"))
-RUN_EVERY_N_FRAMES = int(os.getenv("RUN_EVERY_N_FRAMES", "2"))
+RUN_EVERY_N_FRAMES = int(os.getenv("RUN_EVERY_N_FRAMES", "3"))
 KERAS_INPUT_SIZE = int(os.getenv("KERAS_INPUT_SIZE", "256"))
 
 POST_MORPH = os.getenv("POST_MORPH", "1") == "1"
