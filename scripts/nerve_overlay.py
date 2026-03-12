@@ -12,7 +12,7 @@ DEFAULT_MODEL = os.path.join(REPO_ROOT, "models", "nerve_segmentation.keras")
 
 # ========= CONFIG (env-first) =========
 IDX = int(os.getenv("OBS_CAMERA_INDEX", "1"))
-USE_FULL_FRAME = os.getenv("USE_FULL_FRAME", "1") == "1"
+USE_FULL_FRAME = os.getenv("USE_FULL_FRAME", "0") == "0"
 X = int(os.getenv("ROI_X", "3"))
 Y = int(os.getenv("ROI_Y", "4"))
 W = int(os.getenv("ROI_W", "507"))
@@ -25,7 +25,7 @@ if not os.path.exists(MODEL_PATH) and os.path.exists(DEFAULT_MODEL):
 MODEL_IMG_SIZE = int(os.getenv("KERAS_INPUT_SIZE", "256"))
 ALPHA = float(os.getenv("OVERLAY_ALPHA", "0.35"))
 THRESH = float(os.getenv("KERAS_THRESHOLD", "0.85"))
-RUN_EVERY_N_FRAMES = int(os.getenv("RUN_EVERY_N_FRAMES", "2"))
+RUN_EVERY_N_FRAMES = int(os.getenv("RUN_EVERY_N_FRAMES", "3"))
 
 POST_MORPH = os.getenv("POST_MORPH", "1") == "1"
 MORPH_KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
