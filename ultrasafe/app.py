@@ -55,8 +55,8 @@ MEAN_PROB_ENABLED = os.getenv("MEAN_PROB_ENABLED", "1") == "1"
 MEAN_PROB_MIN = float(os.getenv("MEAN_PROB_MIN", "0.85"))
 
 TEMPORAL_VOTE = os.getenv("TEMPORAL_VOTE", "1") == "1"
-VOTE_K = int(os.getenv("VOTE_K", "3"))
-VOTE_MIN = int(os.getenv("VOTE_MIN", "2"))
+VOTE_K = int(os.getenv("VOTE_K", "6"))
+VOTE_MIN = int(os.getenv("VOTE_MIN", "4"))
 
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
 MODEL_PATH = os.getenv("MODEL_PATH", "")
